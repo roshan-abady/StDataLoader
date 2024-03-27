@@ -67,7 +67,7 @@ def clean_string(s):
 
 with col2:
     try:
-        uploaded_file = st.file_uploader("CSV or Excel", type=["csv", "xls", "xlsx"])  # Add a new file types i.e. "geojson" to the list of accepted file types
+        uploaded_file = st.file_uploader("CSV", type=["csv", "xls", "xlsx"])  # Add a new file types i.e. "geojson" to the list of accepted file types
 
         if uploaded_file:
             file_type = uploaded_file.name.split(".")[-1]

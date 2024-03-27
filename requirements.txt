@@ -1,6 +1,3 @@
-toml
-tomlkit
 pandas
 streamlit
-snowflake-connector-python
 snowflake-snowpark-python
