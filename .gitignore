@@ -1,1 +1,3 @@
-snowflake_config.toml
+snowloader_dev_env/
+.streamlit/
+.gitignore
