@@ -191,11 +191,11 @@ runOnSave = true
 # The port where the server will listen for browser connections.
 # Don't use port 3000 which is reserved for internal development.
 # Default: 8501
-port = 8501
+# port = 8501
 
 # The base path for the URL where Streamlit should be served from.
 # Default: ""
-baseUrlPath = ""
+# baseUrlPath = ""
 
 # Enables support for Cross-Origin Resource Sharing (CORS) protection, for
 # added security.
@@ -258,7 +258,7 @@ enableStaticServing = false
 # - Open the browser
 
 # Default: "localhost"
-serverAddress = "localhost"
+# serverAddress = "localhost"
 
 # Whether to send usage statistics to Streamlit.
 
@@ -300,7 +300,7 @@ serverPort = 8501
 # The "subdirectory" within the S3 bucket where to save apps.
 # S3 calls paths "keys" which is why the keyPrefix is like a subdirectory. Use "" to mean the root directory.
 # Default: ""
-keyPrefix = ""
+# keyPrefix = ""
 
 # AWS region where the bucket is located, e.g. "us-west-2".
 # Default: (unset)
