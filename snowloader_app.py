@@ -37,30 +37,30 @@ col1, col2 = st.columns(2)
 # Allow user to edit config values
 with st.expander("Edit Snowflake Configuration"):
     config["Snowflake"]["User"] = st.text_input(
-        "User", value=config["Snowflake"]["User"]
+        "User", value=config["Snowflake"]["User"] or "default_user"
     )
     config["Snowflake"]["Password"] = st.text_input(
-        "Password", value=config["Snowflake"]["Password"], type="password"
+        "Password", value=config["Snowflake"]["Password"] or "default_password", type="password"
     )
     config["Snowflake"]["Account"] = st.text_input(
-        "Account", value=config["Snowflake"]["Account"]
+        "Account", value=config["Snowflake"]["Account"] or "default_account"
     )
     config["Snowflake"]["Authenticator"] = st.text_input(
-        "Authenticator", value=config["Snowflake"]["Authenticator"]
+        "Authenticator", value=config["Snowflake"]["Authenticator"] or "default_authenticator"
     )
     config["Snowflake"]["Role"] = st.text_input(
-        "Role", value=config["Snowflake"]["Role"]
+        "Role", value=config["Snowflake"]["Role"] or "default_role"
     )
     config["Snowflake"]["Warehouse"] = st.text_input(
-        "Warehouse", value=config["Snowflake"]["Warehouse"]
+        "Warehouse", value=config["Snowflake"]["Warehouse"] or "default_warehouse"
     )
     config["Snowflake"]["Database"] = st.text_input(
-        "Database", value=config["Snowflake"]["Database"]
+        "Database", value=config["Snowflake"]["Database"] or "default_database"
     )
     config["Snowflake"]["Schema"] = st.text_input(
-        "Schema", value=config["Snowflake"]["Schema"]
+        "Schema", value=config["Snowflake"]["Schema"] or "default_schema"
     )
-
+    
 
 def format_table_name(name):
     name = re.sub(
