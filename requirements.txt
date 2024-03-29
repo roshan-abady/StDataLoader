@@ -1,3 +1,4 @@
 pandas
 streamlit
 snowflake-snowpark-python
+toml
