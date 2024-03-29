@@ -19,7 +19,7 @@ st.write(
     or select it using the ***Browse files*** button.
         """
 )
-secrets = toml.load(".streamlit/credentials.toml")
+secrets = toml.load("credentials.toml")
 config = {
     "Snowflake": {
         "User": f"{getpass.getuser()}@myob.com",
@@ -40,7 +40,7 @@ with st.expander("Edit Snowflake Configuration"):
         "User", value=config["Snowflake"]["User"] or "default_user"
     )
     config["Snowflake"]["Password"] = st.text_input(
-        "Password", value=config["Snowflake"]["Password"] or "default_password", type="password"
+        "Password", value=config["Snowflake"]["Password"] or "", type="password"
     )
     config["Snowflake"]["Account"] = st.text_input(
         "Account", value=config["Snowflake"]["Account"] or "default_account"
