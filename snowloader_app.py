@@ -19,7 +19,7 @@ st.write(
     or select it using the ***Browse files*** button.
         """
 )
-secrets = toml.load("credentials.toml")
+secrets = toml.load(".streamlit/credentials.toml")
 config = {
     "Snowflake": {
         "User": f"{getpass.getuser()}@myob.com",
