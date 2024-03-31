@@ -23,7 +23,6 @@ EXPOSE 8501
 # Disable Streamlit's onboard email prompt and ensure it can run in headless environments.
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=False
 ENV STREAMLIT_SERVER_HEADLESS=true
-ENV STREAMLIT_SERVER_ADDRESS="0.0.0.0"
 
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
