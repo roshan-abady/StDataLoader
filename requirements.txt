@@ -1,4 +1,5 @@
 pandas
 streamlit
+webdriver-manager
 snowflake-snowpark-python
 toml
