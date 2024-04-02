@@ -8,6 +8,9 @@ import pandas as pd
 import streamlit as st
 from snowflake.snowpark import Session
 
+import sys
+import io
+
 warnings.filterwarnings('ignore', category=FutureWarning, module='pyarrow.pandas_compat')
 
 st.title("Snowloader")
@@ -47,22 +50,51 @@ def format_table_name(name):
     name = re.sub(r'\W+', '_', name)  # Replace non-alphanumeric characters with underscores
     return name.upper()
 
+# Function to upload data to Snowflake
 def snowflake_upload_operation(table_name, df, config, results):
     try:
+        # Create a string buffer to capture stdout
+        buffer = io.StringIO()
+        
+        # Redirect stdout to the buffer
+        sys.stdout = buffer
+
+        # Create the Snowflake session
         session = Session.builder.configs(config).create()
+
+        # The URL should have been printed to stdout, capture it from the buffer
+        buffer.seek(0)  # Go to the start of the buffer
+        output = buffer.getvalue()
+        
+        # Look for the URL in the captured output
+        url_pattern = re.compile(r'https?://[^\s]+')
+        match = url_pattern.search(output)
+        if match:
+            url = match.group()
+            results['url'] = url  # Save the URL to the results dict
+
+        # Restore stdout to its original state
+        sys.stdout = sys.__stdout__
+
+        # Check if table exists
         tables = session.sql(f"SHOW TABLES LIKE '{table_name}' IN SCHEMA {config['Schema']}").collect()
 
         if tables:  # If table already exists
             results["exists"] = True
-        else:  # If table does not exist
+        else:  # If table does not exist, upload data
             session.write_pandas(df, table_name, auto_create_table=True, overwrite=True)
             results["success"] = True
-    except Exception as e:
-        results["error"] = str(e)
 
+    except Exception as e:
+        results['error'] = str(e)
+
+        # Restore stdout to its original state in case of an error
+        sys.stdout = sys.__stdout__
+
+# Function to clean string
 def clean_string(s):
     if isinstance(s, str):
-        s = s.translate(str.maketrans('', '', '\'\"[]{}()'))  # Removes ' " [ ] { } ( )
+        s = s.translate(str.maketrans("", "", "'\"[]{}()"))  # Removes ' " [ ] { } ( )
     return s
 
 with col2:
@@ -86,13 +118,19 @@ with col2:
             with col1:
                 st.write("Preview of Data:")
                 st.write(df.head())
-            results = {"exists": False, "success": False, "error": None}
+            results = {"exists": False, "success": False, "error": None, "url": None}
             if st.button("Upload to Snowflake"):
                 formatted_table_name = format_table_name(table_name)
-                thread = threading.Thread(target=snowflake_upload_operation, args=(formatted_table_name, df, config['Snowflake'], results))
+                thread = threading.Thread(
+                    target=snowflake_upload_operation,
+                    args=(formatted_table_name, df, config["Snowflake"], results),
+                )
                 thread.start()
                 thread.join()
-
+                
+                if results['url']:
+                    # You can use Streamlit to display the URL and provide instructions to the user
+                    st.info(f"Please open this URL in your browser to authenticate: {results['url']}")
                 if results["error"]:
                     st.error(f"An error occurred: {results['error']}")
                 elif results["exists"]:
