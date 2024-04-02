@@ -9,13 +9,13 @@ import pandas as pd
 import streamlit as st
 from snowflake.snowpark import Session
 # for headless browser automation
-import io
+# import io
 import sys
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+# from selenium import webdriver
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.chrome.service import Service
 
-from webdriver_manager.chrome import ChromeDriverManager
+# from webdriver_manager.chrome import ChromeDriverManager
 
 warnings.filterwarnings(
     "ignore", category=FutureWarning, module="pyarrow.pandas_compat"
