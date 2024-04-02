@@ -118,7 +118,11 @@ with col2:
             with col1:
                 st.write("Preview of Data:")
                 st.write(df.head())
+                
             results = {"exists": False, "success": False, "error": None, "url": None}
+                        # Add a session state variable for the auth URL
+            if 'auth_url' not in st.session_state:
+                st.session_state['auth_url'] = None
             if st.button("Upload to Snowflake"):
                 formatted_table_name = format_table_name(table_name)
                 thread = threading.Thread(
@@ -129,8 +133,12 @@ with col2:
                 thread.join()
                 
                 if results['url']:
-                    # You can use Streamlit to display the URL and provide instructions to the user
-                    st.info(f"Please open this URL in your browser to authenticate: {results['url']}")
+                    st.session_state['auth_url'] = results['url']
+                    st.info("A new browser tab will open for authentication.")
+                    st.button("Authenticate with Snowflake")
+                    js = f"window.open('{st.session_state['auth_url']}')"  # JavaScript to open a new tab
+                    html = f"<img src onerror='{js}'>"
+                    st.components.v1.html(html, height=0, width=0)  # Invisible image to run JavaScript
                 if results["error"]:
                     st.error(f"An error occurred: {results['error']}")
                 elif results["exists"]:
@@ -138,7 +146,14 @@ with col2:
                         if st.button("Table Name already exists! Change the Table Name. Or if you'd like to overwrite the existing table click this button."):
                             st.session_state.confirmed_overwrite = True
                             st.success(f"Uploaded data to Snowflake table {formatted_table_name}.")
-            if results["success"]:
-                st.success(f"Uploaded data to Snowflake table {formatted_table_name}.")
+                if results["success"]:
+                    st.success(f"Uploaded data to Snowflake table {formatted_table_name}.")
+                # Button to initiate authentication
+            # if st.session_state['auth_url']:
+            #     if st.button("Authenticate with Snowflake"):
+            #         # Open the authentication URL in a new browser tab
+            #         js = f"window.open('{st.session_state['auth_url']}')"  # JavaScript to open a new tab
+            #         html = f"<img src onerror='{js}'>"
+            #         st.components.v1.html(html, height=0, width=0)  # Invisible image to run JavaScript
     except Exception as e:
         st.error(f"An error occurred: {e}")
