@@ -9,13 +9,10 @@ import pandas as pd
 import streamlit as st
 from snowflake.snowpark import Session
 # for headless browser automation
-# import io
-# import sys
-# from selenium import webdriver
-# from selenium.webdriver.chrome.options import Options
-# from selenium.webdriver.chrome.service import Service
-
-# from webdriver_manager.chrome import ChromeDriverManager
+import io
+import sys
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 warnings.filterwarnings(
     "ignore", category=FutureWarning, module="pyarrow.pandas_compat"
@@ -79,39 +76,30 @@ def format_table_name(name):
 
 def snowflake_upload_operation(table_name, df, config, results):
     try:
-        # Redirect stdout to a string buffer
+        # # Redirect stdout to a string buffer
         # old_stdout = sys.stdout
         # sys.stdout = buffer = io.StringIO()
         
-        # Create the Snowflake session
-        # This will print the URL to the string buffer instead of the terminal
+        # # Create the Snowflake session
+        # # This will print the URL to the string buffer instead of the terminal
         session = Session.builder.configs(config).create()
 
-        # Reset stdout back to its original state
+        # # Reset stdout back to its original state
         # sys.stdout = old_stdout
 
-        # Extract the URL from the buffer
-        # This assumes the URL is the last word in the output
+        # # Extract the URL from the buffer
+        # # This assumes the URL is the last word in the output
         # url = buffer.getvalue().split()[-1]
 
-        # Set up Selenium to run in headless mode
+        # # Set up Selenium to run in headless mode
         # options = Options()
         # options.headless = True
-        
-        # This option is often required in Docker/container environments
-        # options.add_argument("--no-sandbox") 
-        # Overcomes limited resource problems
-        # options.add_argument("--disable-dev-shm-usage")  
-        
-        # Set up the Chrome service
-        # chrome_service = Service(ChromeDriverManager().install())
         # driver = webdriver.Chrome(options=options)
 
-        # Open the URL in the browser
-        # driver = webdriver.Chrome(service=chrome_service, options=options)
+        # # Open the URL in the browser
         # driver.get(url)
 
-        # Don't forget to quit the driver when you're done
+        # # Don't forget to quit the driver when you're done
         # driver.quit()
         
         tables = session.sql(
