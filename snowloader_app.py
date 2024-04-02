@@ -8,6 +8,14 @@ import threading
 import pandas as pd
 import streamlit as st
 from snowflake.snowpark import Session
+# for headless browser automation
+import io
+import sys
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+
+from webdriver_manager.chrome import ChromeDriverManager
 
 warnings.filterwarnings(
     "ignore", category=FutureWarning, module="pyarrow.pandas_compat"
@@ -71,7 +79,32 @@ def format_table_name(name):
 
 def snowflake_upload_operation(table_name, df, config, results):
     try:
+        # Redirect stdout to a string buffer
+        old_stdout = sys.stdout
+        sys.stdout = buffer = io.StringIO()
+        
+        # Create the Snowflake session
+        # This will print the URL to the string buffer instead of the terminal
         session = Session.builder.configs(config).create()
+
+        # Reset stdout back to its original state
+        sys.stdout = old_stdout
+
+        # Extract the URL from the buffer
+        # This assumes the URL is the last word in the output
+        url = buffer.getvalue().split()[-1]
+
+        # Set up Selenium to run in headless mode
+        options = Options()
+        options.headless = True
+        driver = webdriver.Chrome(options=options)
+
+        # Open the URL in the browser
+        driver.get(url)
+
+        # Don't forget to quit the driver when you're done
+        driver.quit()
+        
         tables = session.sql(
             f"SHOW TABLES LIKE '{table_name}' IN SCHEMA {config['Schema']}"
         ).collect()
