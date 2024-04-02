@@ -10,7 +10,7 @@ import streamlit as st
 from snowflake.snowpark import Session
 # for headless browser automation
 # import io
-import sys
+# import sys
 # from selenium import webdriver
 # from selenium.webdriver.chrome.options import Options
 # from selenium.webdriver.chrome.service import Service
