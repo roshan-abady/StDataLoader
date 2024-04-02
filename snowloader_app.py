@@ -97,9 +97,18 @@ def snowflake_upload_operation(table_name, df, config, results):
         # Set up Selenium to run in headless mode
         options = Options()
         options.headless = True
-        driver = webdriver.Chrome(options=options)
+        
+        # This option is often required in Docker/container environments
+        options.add_argument("--no-sandbox") 
+        # Overcomes limited resource problems
+        options.add_argument("--disable-dev-shm-usage")  
+        
+        # Set up the Chrome service
+        chrome_service = Service(ChromeDriverManager().install())
+        # driver = webdriver.Chrome(options=options)
 
         # Open the URL in the browser
+        driver = webdriver.Chrome(service=chrome_service, options=options)
         driver.get(url)
 
         # Don't forget to quit the driver when you're done
