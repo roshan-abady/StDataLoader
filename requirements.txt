@@ -3,4 +3,5 @@ streamlit
 selenium
 webdriver-manager
 snowflake-snowpark-python
+snowflake-connector-python[pandas]
 toml
