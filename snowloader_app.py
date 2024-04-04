@@ -83,10 +83,10 @@ default_config = {
     "password": '',
     "account": 'bu20658.ap-southeast-2',
     "authenticator": 'externalbrowser',
-    "role": 'OPERATIONS_ANALYTICS_MEMBER_AD',
+    "role": 'OPERATIONS_ANALYTICS_OWNER_AD',
     "warehouse": 'OPERATIONS_ANALYTICS_WAREHOUSE_PROD',
     "database": 'OPERATIONS_ANALYTICS',
-    "schema": 'RAW',
+    "schema": 'TRANSFORMED_PROD',
     "client_session_keep_alive": True,
 }
 
