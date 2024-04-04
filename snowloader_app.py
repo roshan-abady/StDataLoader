@@ -1,159 +1,150 @@
-#!/usr/bin/env python
-# snowloader.py
 import re
+import json
 import getpass
 import warnings
-import threading
 import pandas as pd
 import streamlit as st
 from snowflake.snowpark import Session
 
-import sys
-import io
-
 warnings.filterwarnings('ignore', category=FutureWarning, module='pyarrow.pandas_compat')
 
-st.title("Snowloader")
-st.write(
-    """Drag and Drop the ***CSV*** or ***Excel file***, you want to load into snowflake,
-    or select it using the ***Browse files*** button.
-        """
-)
+# Add a function to change the table ownership
+def change_table_ownership(session, table_name, new_owner_role):
+    """
+    Changes the ownership of the specified table to the given role.
+    
+    Args:
+    - session: The active Snowflake session.
+    - table_name: Name of the table for which to change ownership.
+    - new_owner_role: The role to which ownership of the table will be transferred.
+    """
+    try:
+        # Use the SQL to change the ownership of the table
+        session.sql(f"GRANT OWNERSHIP ON TABLE {table_name} TO ROLE {new_owner_role}").collect()
+        st.success(f"Ownership of table {table_name} changed to {new_owner_role}.")
+    except Exception as e:
+        st.error(f"Failed to change ownership of table {table_name}: {e}")
+        
+# Define the function to check the Snowflake session status
+def check_session_status(session):
+    try:
+        # Attempt a simple query to check the session
+        result = session.sql("SELECT CURRENT_TIMESTAMP").collect()
+        if result:
+            # If the query succeeds, the session is active
+            return "Active"
+    except Exception as e:
+        # If an exception occurs, the session is not active
+        return f"Failed to execute query. Error: {e}"
+    return "Inactive"
 
-config = {
-    "Snowflake": {
-        "User": f"{getpass.getuser()}@myob.com",
-        "Password": '',
-        "Account": 'bu20658.ap-southeast-2',
-        "Authenticator": 'externalbrowser',
-        "Role": 'OPERATIONS_ANALYTICS_MEMBER_AD',
-        "Warehouse":'OPERATIONS_ANALYTICS_WAREHOUSE_PROD',
-        "Database": 'OPERATIONS_ANALYTICS',
-        "Schema": 'RAW'
-    }
-}
-col1, col2 = st.columns(2)
-
-# Allow user to edit config values
-with st.expander("Edit Snowflake Configuration"):
-    config['Snowflake']['User'] = st.text_input("User", value=config['Snowflake']['User'])
-    config['Snowflake']['Password'] = st.text_input("Password", value=config['Snowflake']['Password'], type="password")
-    config['Snowflake']['Account'] = st.text_input("Account", value=config['Snowflake']['Account'])
-    config['Snowflake']['Authenticator'] = st.text_input("Authenticator", value=config['Snowflake']['Authenticator'])
-    config['Snowflake']['Role'] = st.text_input("Role", value=config['Snowflake']['Role'])
-    config['Snowflake']['Warehouse'] = st.text_input("Warehouse", value=config['Snowflake']['Warehouse'])
-    config['Snowflake']['Database'] = st.text_input("Database", value=config['Snowflake']['Database'])
-    config['Snowflake']['Schema'] = st.text_input("Schema", value=config['Snowflake']['Schema'])
-
-
+# Function to format table name
 def format_table_name(name):
     name = re.sub(r'\W+', '_', name)  # Replace non-alphanumeric characters with underscores
     return name.upper()
 
-# Function to upload data to Snowflake
-def snowflake_upload_operation(table_name, df, config, results):
+# Function for upload operation with automatic overwrite
+def snowflake_upload_operation(table_name, df):
     try:
-        # Create a string buffer to capture stdout
-        buffer = io.StringIO()
-        
-        # Redirect stdout to the buffer
-        sys.stdout = buffer
-
-        # Create the Snowflake session
-        session = Session.builder.configs(config).create()
-
-        # The URL should have been printed to stdout, capture it from the buffer
-        buffer.seek(0)  # Go to the start of the buffer
-        output = buffer.getvalue()
-        
-        # Look for the URL in the captured output
-        url_pattern = re.compile(r'https?://[^\s]+')
-        match = url_pattern.search(output)
-        if match:
-            url = match.group()
-            results['url'] = url  # Save the URL to the results dict
-
-        # Restore stdout to its original state
-        sys.stdout = sys.__stdout__
-
-        # Check if table exists
-        tables = session.sql(f"SHOW TABLES LIKE '{table_name}' IN SCHEMA {config['Schema']}").collect()
-
-        if tables:  # If table already exists
-            results["exists"] = True
-        else:  # If table does not exist, upload data
-            session.write_pandas(df, table_name, auto_create_table=True, overwrite=True)
-            results["success"] = True
-
+        # Overwrite table if it exists, create a new one if it doesn't
+        session.write_pandas(df, table_name, auto_create_table=True, overwrite=True)
+        return True, None
     except Exception as e:
-        results['error'] = str(e)
+        return False, str(e)
 
-        # Restore stdout to its original state in case of an error
-        sys.stdout = sys.__stdout__
-
-# Function to clean string
-def clean_string(s):
-    if isinstance(s, str):
-        s = s.translate(str.maketrans("", "", "'\"[]{}()"))  # Removes ' " [ ] { } ( )
-    return s
-
-with col2:
+# Function to initialize or update the Snowflake session
+def init_or_update_snowflake_session(config):
     try:
-        uploaded_file = st.file_uploader("CSV or Excel", type=["csv", "xls", "xlsx"])  # Add a new file types i.e. "geojson" to the list of accepted file types
+        st.session_state.snowflake_session = Session.builder.configs(config).create()
+        session_status = check_session_status(st.session_state.snowflake_session)
+    except Exception as e:
+        st.error(f"Failed to create/update Snowflake session: {e}")
+        st.session_state.snowflake_session = None
 
-        if uploaded_file:
-            file_type = uploaded_file.name.split(".")[-1]
+# Function to fetch available roles and filter them based on the database name
+def fetch_available_roles(session, database_name):
+    try:
+        # Execute the query to get available roles
+        result = session.sql("SELECT CURRENT_AVAILABLE_ROLES()").collect()
+        if result:
+            # Assuming the result is a string representation of a list
+            roles_list = json.loads(result[0][0])
+            # Filter roles that start with the database name
+            relevant_roles = sorted([role for role in roles_list if role.startswith(database_name)])
+            return relevant_roles
+    except Exception as e:
+        st.error(f"Failed to fetch available roles: {e}")
+        return []
+    return []
 
-            if file_type not in ["csv", "xls", "xlsx"]:  # Add a new file types i.e. "geojson" to the list of supported file types
-                st.error("File type not supported.")
+# Default Snowflake connection parameters with added heartbeat frequency
+default_config = {
+    "user": f"{getpass.getuser()}@myob.com",
+    "password": '',
+    "account": 'bu20658.ap-southeast-2',
+    "authenticator": 'externalbrowser',
+    "role": 'OPERATIONS_ANALYTICS_MEMBER_AD',
+    "warehouse": 'OPERATIONS_ANALYTICS_WAREHOUSE_PROD',
+    "database": 'OPERATIONS_ANALYTICS',
+    "schema": 'RAW',
+    "client_session_keep_alive": True,
+}
 
+# Initialize or update Snowflake session
+if 'snowflake_session' not in st.session_state:
+    init_or_update_snowflake_session(default_config)
+session = st.session_state.get('snowflake_session')
+
+if session is None:
+    st.error("Failed to initialize Snowflake session.")
+else:
+    available_roles = fetch_available_roles(session, default_config["database"])
+    current_schema = session.sql(f"SELECT CURRENT_SCHEMA()").collect()[0]
+
+    st.title("Snowloader")
+    st.write("""Drag and Drop the ***CSV*** or ***Excel file*** you want to load into Snowflake,
+              or select it using the ***Browse files*** button.""")
+
+    uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xls", "xlsx"])
+    if uploaded_file is not None:
+        file_type = uploaded_file.name.split(".")[-1]
+        if file_type in ["csv", "xls", "xlsx"]:
             default_table_name = format_table_name(uploaded_file.name.split(".")[0])
-            table_name = st.text_input("Table Name:", default_table_name)
-
+            table_name = st.text_input("Edit Table Name:", value=default_table_name if default_table_name else "table_name")
+            table_name = format_table_name(table_name)
+            st.write(f"**Table Name Preview:**")
+            st.info(f"{table_name}")
             if file_type == "csv":
-                df = pd.read_csv(uploaded_file, low_memory=False, encoding='ISO-8859-1') 
-            elif file_type in ["xls", "xlsx"]:
+                df = pd.read_csv(uploaded_file, low_memory=False)
+            else:
                 df = pd.read_excel(uploaded_file)
-            # Moved preview to col1
-            with col1:
-                st.write("Preview of Data:")
-                st.write(df.head())
-                
-            results = {"exists": False, "success": False, "error": None, "url": None}
-                        # Add a session state variable for the auth URL
-            if 'auth_url' not in st.session_state:
-                st.session_state['auth_url'] = None
+
+            st.write("Preview of Data:")
+            st.dataframe(df.head())
+        with st.spinner("Uploading to Snowflake..."):
             if st.button("Upload to Snowflake"):
-                formatted_table_name = format_table_name(table_name)
-                thread = threading.Thread(
-                    target=snowflake_upload_operation,
-                    args=(formatted_table_name, df, config["Snowflake"], results),
-                )
-                thread.start()
-                thread.join()
-                
-                if results['url']:
-                    st.session_state['auth_url'] = results['url']
-                    st.info("A new browser tab will open for authentication.")
-                    st.button("Authenticate with Snowflake")
-                    js = f"window.open('{st.session_state['auth_url']}')"  # JavaScript to open a new tab
-                    html = f"<img src onerror='{js}'>"
-                    st.components.v1.html(html, height=0, width=0)  # Invisible image to run JavaScript
-                if results["error"]:
-                    st.error(f"An error occurred: {results['error']}")
-                elif results["exists"]:
-                    if "confirmed_overwrite" not in st.session_state:
-                        if st.button("Table Name already exists! Change the Table Name. Or if you'd like to overwrite the existing table click this button."):
-                            st.session_state.confirmed_overwrite = True
-                            st.success(f"Uploaded data to Snowflake table {formatted_table_name}.")
-                if results["success"]:
-                    st.success(f"Uploaded data to Snowflake table {formatted_table_name}.")
-                # Button to initiate authentication
-            # if st.session_state['auth_url']:
-            #     if st.button("Authenticate with Snowflake"):
-            #         # Open the authentication URL in a new browser tab
-            #         js = f"window.open('{st.session_state['auth_url']}')"  # JavaScript to open a new tab
-            #         html = f"<img src onerror='{js}'>"
-            #         st.components.v1.html(html, height=0, width=0)  # Invisible image to run JavaScript
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+                success, error = snowflake_upload_operation(table_name, df)
+                if success:
+                    st.success(f"Successfully Uploaded/Overwritten to Snowflake table {table_name}", icon="✅")
+                    
+                    # Example condition to change table ownership
+                    if table_name == "your_specific_table_name":
+                        change_table_ownership(session, table_name, "OPERATIONS_ANALYTICS_TRANSFORM_RUNNER_PROD")
+                else:
+                    st.error(f"An error occurred: {error}")
+
+    # UI for modifying Snowflake connection parameters at the bottom
+    with st.expander("Snowflake Connection Configuration"):
+        editable_keys = ['schema', 'user']
+        for key in default_config.keys():
+            if key in editable_keys:
+                default_config[key] = st.text_input(f"{key}", value=default_config[key])
+            elif key == "role":
+                # Dropdown for 'role' parameter using dynamically fetched roles
+                default_config["role"] = st.selectbox("role", options=available_roles, index=available_roles.index(default_config["role"]))
+            else:
+                st.text(f"{key}")
+                st.info(default_config[key])
+
+        if st.button("Update Connection"):
+            init_or_update_snowflake_session(default_config)
