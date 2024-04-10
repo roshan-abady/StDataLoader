@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+streamlit run snowloader_app.py
