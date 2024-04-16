@@ -71,6 +71,16 @@ def snowflake_upload_operation(session, table_name, df):
         return True, None
     except Exception as e:
         return False, str(e)
+    
+def fetch_and_preview_ddl(session, table_name):
+    try:
+        ddl_result = session.sql(f"SELECT GET_DDL('TABLE', '{table_name}')").collect()[0][0]
+        st.write("Table DDL:")
+        st.code(ddl_result,language="sql", line_numbers=True)
+        return ddl_result
+    except Exception as e:
+        st.error(f"Error fetching DDL for {table_name}: {e}")
+        return ""
 
 def init_or_update_snowflake_session(config):
     try:
@@ -79,6 +89,20 @@ def init_or_update_snowflake_session(config):
     except Exception as e:
         st.error(f"Failed to create/update Snowflake session: {e}")
         st.session_state.snowflake_session = None
+
+def fetch_available_roles(session, database_name):
+    try:
+        result = session.sql("SELECT CURRENT_AVAILABLE_ROLES()").collect()
+        if result:
+            roles_list = json.loads(result[0][0])
+            relevant_roles = sorted([role for role in roles_list if role.startswith(database_name)])
+            return relevant_roles
+    except Exception as e:
+        st.error(f"Failed to fetch available roles: {e}")
+        return []
+    return []
+
+col1, col2 = st.columns(2)
 
 default_config = {
     "user": f"{getpass.getuser()}@myob.com",
@@ -97,6 +121,7 @@ if 'snowflake_session' not in st.session_state:
 
 session = st.session_state.get('snowflake_session')
 
+
 if session is None:
     st.error("Failed to initialize Snowflake session.")
 else:
@@ -104,59 +129,30 @@ else:
     uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xls", "xlsx"])
     if uploaded_file is not None:
         file_type = uploaded_file.name.split(".")[-1]
-        default_table_name = format_table_name(uploaded_file.name.split(".")[0])
-        table_name = format_table_name(default_table_name)
-        st.write("**Table Name Preview:**")
-        st.info(f"{table_name}")
-        
-        # Display DDL of the table
-        if st.button("Show Table DDL"):
-            fetch_and_extract_schema(session, table_name)
+        if file_type in ["csv", "xls", "xlsx"]:
+            # default_table_name = format_table_name(uploaded_file.name.split(".")[0])
+            # table_name = st.text_input("Edit Table Name:", value=default_table_name if default_table_name else "table_name")
+            table_name = format_table_name(uploaded_file.name.split(".")[0])
+            
+            st.write("**Table Name Preview:**")
+            st.info(f"{table_name}")
+            if st.button("Upload to Snowflake"):
+                with st.spinner("Uploading to Snowflake..."):
+                    success, error = snowflake_upload_operation(session, table_name, df, table_schemas)
+                    if success:
+                        st.success(f"Successfully Uploaded/Overwritten to Snowflake table {table_name}", icon="✅")
+                    else:
+                        st.error(f"An error occurred: {error}")
+        # col1, col2 = st.columns(2)
+        # with col2:
 
-        if file_type == "csv":
-            df = pd.read_csv(uploaded_file, low_memory=False)
-        else:
-            df = pd.read_excel(uploaded_file)
-        st.write("Preview of Data:")
-        st.dataframe(df.head())
-        
-        if st.button("Upload to Snowflake"):
-            with st.spinner("Uploading to Snowflake..."):
-                success, error = snowflake_upload_operation(session, table_name, df)
-                if success:
-                    st.success(f"Successfully Uploaded/Overwritten to Snowflake table {table_name}", icon="✅")
-                else:
-                    st.error(f"An error occurred: {error}")
-
-
-# UI for modifying Snowflake connection parameters at the bottom
-with st.expander("Snowflake Connection Configuration"):
-    # Define keys that users can edit
-    editable_keys = ['user']  # 'schema' is removed from here as we are providing a dropdown for it
-    
-    # Define keys that users can select from a dropdown
-    dropdown_keys = ['role', 'schema']  # 'schema' added here for dropdown selection
-    schema_options = ['TRANSFORMED_PROD', 'RAW']  # Options for schema dropdown
-    
-    # Display editable keys with text inputs
-    for key in editable_keys:
-        default_config[key] = st.text_input(f"{key}", value=default_config[key])
-
-    # Dropdown for schema selection
-    if 'schema' in dropdown_keys:
-        selected_schema = st.selectbox("Schema", options=schema_options, index=schema_options.index(default_config['schema']) if default_config['schema'] in schema_options else 0)
-        default_config['schema'] = selected_schema
-
-    # Specific roles for dropdown (assuming you fetch roles somewhere)
-    specific_roles = ['OPERATIONS_ANALYTICS_OWNER', 'OPERATIONS_ANALYTICS_MEMBER']  # Specific roles for dropdown
-    available_roles = [role for role in specific_roles if role in specific_roles]  # Filter roles
-
-    # Dropdown for selecting roles
-    if 'role' in dropdown_keys:
-        selected_role = st.selectbox("Role", options=available_roles, index=0 if available_roles else None)
-        if available_roles:
-            default_config['role'] = selected_role
-
-    # Button to update connection
-    if st.button("Update Connection"):
-        init_or_update_snowflake_session(default_config)
+            if file_type == "csv":
+                df = pd.read_csv(uploaded_file, low_memory=False)
+            else:
+                df = pd.read_excel(uploaded_file)
+            # Preview data types here before further operations
+            # df_data_types = preview_df_data_types_streamlit(df)
+        # with col1:
+            st.write("Preview of Data:")
+            st.dataframe(df.head())
+            fetch_and_preview_ddl(session, table_name)
