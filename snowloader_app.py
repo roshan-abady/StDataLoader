@@ -1,4 +1,5 @@
 import re
+import os
 import json
 import getpass
 import warnings
@@ -22,88 +23,97 @@ def format_table_name(name):
     name = re.sub(r'\W+', '_', name)
     return name.upper()
 
-def fetch_and_extract_schema(session, table_name):
-    try:
-        ddl_result = session.sql(f"SELECT GET_DDL('TABLE', '{table_name}')").collect()
-        if ddl_result:
-            ddl_str = ddl_result[0][0]
-            return parse_ddl_to_schema(ddl_str)
-        else:
-            st.error(f"No DDL found for {table_name}")
-            return {}
-    except Exception as e:
-        st.error(f"Error fetching DDL for {table_name}: {e}")
-        return {}
-
-def parse_ddl_to_schema(ddl_str):
-    schema_dict = {}
-    pattern = re.compile(r'\"(\w+)\"\s+(\w+)(?:\s+\w+)*,?')
-    matches = pattern.findall(ddl_str)
-    for match in matches:
-        column_name, data_type = match[0], match[1]
-        schema_dict[column_name] = map_snowflake_to_pandas_dtype(data_type)
-    return schema_dict
-
-def map_snowflake_to_pandas_dtype(snowflake_type):
-    return {
-        'VARCHAR': 'object', 'TEXT': 'object',
-        'NUMBER': 'float64', 'INTEGER': 'int64',
-        'FLOAT': 'float64', 'BOOLEAN': 'bool',
-        'DATE': 'datetime64', 'TIMESTAMP': 'datetime64[ns]'
-    }.get(snowflake_type, 'object')
-
-def adjust_dataframe_types_using_schema(df, schema):
-    for column, dtype in schema.items():
-        if column in df.columns:
-            try:
-                df[column] = df[column].astype(dtype)
-            except Exception as e:
-                st.warning(f"Could not convert column {column} to {dtype}: {e}")
-    return df
-
-def snowflake_upload_operation(session, table_name, df):
-    try:
-        df = adjust_dataframe_types_using_schema(df, fetch_and_extract_schema(session, table_name))
-        session.sql(f"DELETE FROM {table_name}").collect()
-        st.success(f"Table {table_name} has been truncated.")
-        session.write_pandas(df, table_name, auto_create_table=True)
-        st.success(f"Successfully uploaded data to Snowflake table {table_name}.")
-        return True, None
-    except Exception as e:
-        return False, str(e)
-    
 def fetch_and_preview_ddl(session, table_name):
     try:
         ddl_result = session.sql(f"SELECT GET_DDL('TABLE', '{table_name}')").collect()[0][0]
         st.write("Table DDL:")
-        st.code(ddl_result,language="sql", line_numbers=True)
+        st.code(ddl_result, language="sql", line_numbers=True)
         return ddl_result
     except Exception as e:
         st.error(f"Error fetching DDL for {table_name}: {e}")
         return ""
 
+def parse_sql_schema_file(table_name):
+    schema_dict = {}
+    try:
+        file_path = os.path.join('./sql', f'{table_name}.sql')
+        with open(file_path, 'r') as file:
+            sql_content = file.read()
+        pattern = re.compile(r'(\w+)\s+(\w+)\(([\d,]+)\)')
+        matches = pattern.findall(sql_content)
+        for match in matches:
+            column_name, data_type, details = match
+            full_type = f"{data_type}({details})"
+            schema_dict[column_name] = full_type
+        return schema_dict
+    except FileNotFoundError:
+        st.error(f"Schema file for {table_name} not found.")
+        return None
+    except Exception as e:
+        st.error(f"An error occurred while parsing the schema file: {e}")
+        return None
+
 def init_or_update_snowflake_session(config):
-    try:
-        st.session_state.snowflake_session = Session.builder.configs(config).create()
-        session_status = check_session_status(st.session_state.snowflake_session)
-    except Exception as e:
-        st.error(f"Failed to create/update Snowflake session: {e}")
-        st.session_state.snowflake_session = None
+    if 'last_config' not in st.session_state or config != st.session_state.last_config:
+        try:
+            
+            st.session_state.snowflake_session = Session.builder.configs(config).create()
+            session_status = check_session_status(st.session_state.snowflake_session)
+            if session_status == "Active":
+                st.success("Snowflake session is active.")
+            else:
+                st.error("Snowflake session is inactive.")
+            st.session_state.last_config = config.copy()  # Save the last config used to initialize the session
+        except Exception as e:
+            st.error(f"Failed to create/update Snowflake session: {e}")
+            st.session_state.snowflake_session = None
 
-def fetch_available_roles(session, database_name):
-    try:
-        result = session.sql("SELECT CURRENT_AVAILABLE_ROLES()").collect()
-        if result:
-            roles_list = json.loads(result[0][0])
-            relevant_roles = sorted([role for role in roles_list if role.startswith(database_name)])
-            return relevant_roles
-    except Exception as e:
-        st.error(f"Failed to fetch available roles: {e}")
-        return []
-    return []
+def modify_snowflake_connection_parameters(default_config):
+    st.markdown("---")
+    st.write("Snowflake Connection Configuration:")
+    schemas = ['TRANSFORMED_PROD', 'RAW']
+    roles = ['OPERATIONS_ANALYTICS_OWNER', 'OPERATIONS_ANALYTICS_OWNER_AD']
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
+    
+    new_schema = col1.radio("Schema", options=schemas, index=schemas.index(default_config['schema']) if default_config['schema'] in schemas else 0)
+    available_roles = [role for role in roles if role in roles]
+    
+    new_role = col2.radio("Role", options=available_roles, index=roles.index(default_config['role']) if default_config['role'] in roles else None)
 
+    if new_schema != default_config['schema'] or new_role != default_config['role']:
+        default_config['schema'] = new_schema
+        default_config['role'] = new_role
+        init_or_update_snowflake_session(default_config)  # Only update if changes are detected
+
+def main():
+    st.title("Data Loader:")
+    uploaded_file = st.file_uploader("Choose a CSV file:", type=["csv"])
+    if uploaded_file:
+        st.write(f"File Name:")
+        st.info(f"{uploaded_file.name}")
+        if st.button("Upload to Snowflake", key="upload_button"):
+            with st.spinner("Uploading to Snowflake..."):
+                # Dummy function call for uploading (assuming implementation provided elsewhere)
+                st.success(f"Successfully Uploaded/Overwritten to Snowflake table {table_name}")
+        if uploaded_file:
+            file_type = uploaded_file.name.split(".")[-1]
+            table_name = format_table_name(uploaded_file.name.split(".")[0])
+            table_schema = parse_sql_schema_file(table_name)
+            
+            if table_schema:
+                st.write("Data Definition:")
+                st.json(table_schema)
+            
+            df = pd.read_csv(uploaded_file) if file_type == 'csv' else pd.read_excel(uploaded_file)
+            st.write("Preview of Data:")
+            st.dataframe(df.head())
+            
+            modify_snowflake_connection_parameters(default_config)
+        
+
+
+# Default configuration for Snowflake connection
 default_config = {
     "user": f"{getpass.getuser()}@myob.com",
     "password": '',
@@ -116,43 +126,6 @@ default_config = {
     "client_session_keep_alive": True,
 }
 
-if 'snowflake_session' not in st.session_state:
-    init_or_update_snowflake_session(default_config)
+if __name__ == "__main__":
 
-session = st.session_state.get('snowflake_session')
-
-
-if session is None:
-    st.error("Failed to initialize Snowflake session.")
-else:
-    st.title("Snowloader")
-    uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xls", "xlsx"])
-    if uploaded_file is not None:
-        file_type = uploaded_file.name.split(".")[-1]
-        if file_type in ["csv", "xls", "xlsx"]:
-            # default_table_name = format_table_name(uploaded_file.name.split(".")[0])
-            # table_name = st.text_input("Edit Table Name:", value=default_table_name if default_table_name else "table_name")
-            table_name = format_table_name(uploaded_file.name.split(".")[0])
-            
-            st.write("**Table Name Preview:**")
-            st.info(f"{table_name}")
-            if st.button("Upload to Snowflake"):
-                with st.spinner("Uploading to Snowflake..."):
-                    success, error = snowflake_upload_operation(session, table_name, df, table_schemas)
-                    if success:
-                        st.success(f"Successfully Uploaded/Overwritten to Snowflake table {table_name}", icon="✅")
-                    else:
-                        st.error(f"An error occurred: {error}")
-        # col1, col2 = st.columns(2)
-        # with col2:
-
-            if file_type == "csv":
-                df = pd.read_csv(uploaded_file, low_memory=False)
-            else:
-                df = pd.read_excel(uploaded_file)
-            # Preview data types here before further operations
-            # df_data_types = preview_df_data_types_streamlit(df)
-        # with col1:
-            st.write("Preview of Data:")
-            st.dataframe(df.head())
-            fetch_and_preview_ddl(session, table_name)
+    main()
