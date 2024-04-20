@@ -37,50 +37,35 @@ def truncate_table(session, table_name):
     except Exception as e:
         st.error(f"Failed to truncate table {table_name}: {e}")
 
-def bulk_copy_into(session, stage_name, table_name):
+def bulk_copy_into(session, stage_name, table_name, file_type):
     try:
-        session.sql(f"COPY INTO {table_name} FROM @{stage_name} FILE_FORMAT = (TYPE={file_type},SKIP_HEADER=1,FIELD_DELIMITER=',',TRIM_SPACE=FALSE,FIELD_OPTIONALLY_ENCLOSED_BY=NONE,REPLACE_INVALID_CHARACTERS=TRUE,DATE_FORMAT='YYYY-MM-DD',TIME_FORMAT='HH24:MI:SS.FF',TIMESTAMP_FORMAT='YYYY-MM-DD HH24:MI:SS TZH:TZM') ON_ERROR=CONTINUE").collect()
-        st.success("Data successfully copied with schema auto-detection.")
+        session.sql(f"COPY INTO {table_name} FROM @{stage_name} FILE_FORMAT = (TYPE='{file_type}', SKIP_HEADER=1, FIELD_DELIMITER=',', TRIM_SPACE=FALSE, FIELD_OPTIONALLY_ENCLOSED_BY='\"', REPLACE_INVALID_CHARACTERS=TRUE, DATE_FORMAT='YYYY-MM-DD', TIME_FORMAT='HH24:MI:SS.FF', TIMESTAMP_FORMAT='YYYY-MM-DD HH24:MI:SS TZH:TZM') ON_ERROR=CONTINUE").collect()
+        st.success("Data successfully copied.")
     except Exception as e:
-        st.error(f"Failed to copy data with schema auto-detection: {e}")
+        st.error(f"Failed to copy data: {e}")
 
-def snowflake_upload_with_stage(session, df, stage_name, table_name):
-    temp_file = f"./temp/temp_{table_name}.csv"
+def snowflake_upload_with_stage(session, df, stage_name, table_name, file_type):
+    temp_file = f"{table_name}.csv"
     df.to_csv(temp_file, index=False)
     create_stage(session, stage_name)
     upload_data_to_stage(session, stage_name, temp_file)
     truncate_table(session, table_name)
-    bulk_copy_into(session, stage_name, table_name)
+    bulk_copy_into(session, stage_name, table_name, file_type)
     os.remove(temp_file)
 
-def init_or_update_snowflake_session(config):
-    try:
-        st.session_state.snowflake_session = Session.builder.configs(config).create()
-        session_status = check_session_status(st.session_state.snowflake_session)
-        if session_status == "Active":
-            st.success("Snowflake session is active.")
-        else:
-            st.error("Snowflake session is inactive.")
-    except Exception as e:
-        st.error(f"Failed to create/update Snowflake session: {e}")
-        st.session_state.snowflake_session = None
-        
 def modify_snowflake_connection_parameters(default_config):
-        st.write("Snowflake Connection Configuration:")
-        st.info(default_config['user'])
-        radio_keys = ['role', 'schema']
-        schema_options = ['TRANSFORMED_PROD', 'RAW']
-        available_roles = ['OPERATIONS_ANALYTICS_OWNER', 'OPERATIONS_ANALYTICS_OWNER_AD']
-        
-        if 'schema' in radio_keys:
-            selected_schema = st.radio("Schema", options=schema_options, index=schema_options.index(default_config['schema']) if default_config['schema'] in schema_options else 0)
-            default_config['schema'] = selected_schema
+    st.write("Snowflake Connection Configuration:")
+    schema_options = ['TRANSFORMED_PROD', 'RAW']
+    available_roles = ['OPERATIONS_ANALYTICS_OWNER_AD', 'OPERATIONS_ANALYTICS_OWNER']
+    
+    selected_schema = st.radio("Choose Schema", options=schema_options, index=schema_options.index(default_config['schema']))
+    selected_role = st.radio("Choose Role", options=available_roles, index=available_roles.index(default_config['role']))
+    
+    if selected_schema != default_config['schema'] or selected_role != default_config['role']:
+        default_config['schema'] = selected_schema
+        default_config['role'] = selected_role
+        st.session_state.snowflake_session = Session.builder.configs(default_config).create()
 
-            selected_role = st.radio("Role", options=available_roles, index=0 if available_roles else None)
-            default_config['role'] = selected_role
-            init_or_update_snowflake_session(default_config)
-
-                
 # Default configuration for Snowflake connection
 default_config = {
     "user": f"{getpass.getuser()}@myob.com",
@@ -93,26 +78,34 @@ default_config = {
     "schema": 'TRANSFORMED_PROD',
     "client_session_keep_alive": True,
 }
+
+# Initialize Snowflake session once when the app runs
+if 'snowflake_session' not in st.session_state:
+    st.session_state.snowflake_session = Session.builder.configs(default_config).create()
+
+session = st.session_state.snowflake_session
+if check_session_status(session) != "Active":
+    st.error("Failed to initialize or session is inactive.")
+else:
+    st.success("Snowflake session is active and ready.")
+
 # Streamlit UI layout
 st.title("Data Management")
+modify_snowflake_connection_parameters(default_config)  # Display configuration options
+
 uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xls", "xlsx"], key="file_uploader")
-modify_snowflake_connection_parameters(default_config)
+
 if uploaded_file:
     file_type = uploaded_file.name.split(".")[-1]
     table_name = format_table_name(uploaded_file.name.split(".")[0])
     df = pd.read_csv(uploaded_file) if file_type == 'csv' else pd.read_excel(uploaded_file)
     st.write("Preview of Data:")
     st.dataframe(df.head())
-    
+
     if st.button("Upload to Snowflake", key="upload_button"):
         with st.spinner("Uploading to Snowflake..."):
             stage_name = f"{table_name}_stage"
-            if 'snowflake_session' not in st.session_state:
-                init_or_update_snowflake_session(default_config)
-
-            session = st.session_state.get('snowflake_session')
-            if session is None:
-                st.error("Failed to initialize Snowflake session.")
+            if check_session_status(session) == "Active":
+                snowflake_upload_with_stage(session, df, stage_name, table_name, file_type)
             else:
-                modify_snowflake_connection_parameters(default_config)
-            snowflake_upload_with_stage(session, df, stage_name, table_name)
+                st.error("Snowflake session is inactive or not initialized.")
