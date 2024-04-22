@@ -5,7 +5,7 @@ a = Analysis(
     ['snowloader_app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('mapping/mapping.csv', 'mapping')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
