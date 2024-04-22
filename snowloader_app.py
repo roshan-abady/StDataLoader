@@ -4,7 +4,6 @@ import getpass
 import warnings
 import pandas as pd
 import streamlit as st
-
 from snowflake.snowpark import Session
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='pyarrow.pandas_compat')
