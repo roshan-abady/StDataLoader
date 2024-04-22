@@ -97,7 +97,7 @@ mapping_df = load_mapping()  # Load the mapping data
 st.title(":snowflake: Snow Loader")
 modify_snowflake_connection_parameters(default_config)  # Display configuration options
 
-uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xls", "xlsx"], key="file_uploader")
+uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"], key="file_uploader")
 
 if uploaded_file:
     file_type = uploaded_file.name.split(".")[-1]
