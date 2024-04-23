@@ -27,11 +27,11 @@ def format_table_name(name):
 
 def create_stage(session, stage_name):
     session.sql(f"CREATE OR REPLACE STAGE {stage_name}").collect()
-    st.info(f":building_construction: Stage is created.")
+    st.info(f":building_construction: Stage created.")
 
 def upload_data_to_stage(session, stage_name, file_path):
     session.file.put(file_path, stage_name)
-    st.info(f":clapper: Data is Staged.")
+    st.info(f":clapper: Data Staged.")
 
 def truncate_table(session, table_name):
     try:
@@ -43,7 +43,7 @@ def truncate_table(session, table_name):
 def bulk_copy_into(session, stage_name, table_name, file_type):
     try:
         session.sql(f"COPY INTO {table_name} FROM @{stage_name} FILE_FORMAT = (TYPE='{file_type}', SKIP_HEADER=1, FIELD_DELIMITER=',', TRIM_SPACE=FALSE, FIELD_OPTIONALLY_ENCLOSED_BY='\"', REPLACE_INVALID_CHARACTERS=TRUE, DATE_FORMAT='YYYY-MM-DD', TIME_FORMAT='HH24:MI:SS.FF', TIMESTAMP_FORMAT='YYYY-MM-DD HH24:MI:SS TZH:TZM') ON_ERROR=CONTINUE").collect()
-        st.success(":white_check_mark: Data is Loaded.")
+        st.success(":white_check_mark: Data Loaded.")
     except Exception as e:
         st.error(f"Failed to copy data: {e}")
 
@@ -57,21 +57,22 @@ def snowflake_upload_with_stage(session, df, stage_name, table_name, file_type):
     os.remove(temp_file)
 
 def modify_snowflake_connection_parameters(default_config):
-    st.write("Connection Config:")
     schema_options = ['TRANSFORMED_PROD', 'RAW']
     available_roles = ['OPERATIONS_ANALYTICS_OWNER_AD', 'OPERATIONS_ANALYTICS_OWNER']
+    st.write(f"Hi {name} \n\n Here you can pick a different **Schema** and **Role**")
     col1, col2 = st.columns(2)
-    selected_schema = col1.radio("Choose Schema", options=schema_options, index=schema_options.index(default_config['schema']))
-    selected_role = col2.radio("Choose Role", options=available_roles, index=available_roles.index(default_config['role']))
-    
+    selected_schema = col1.radio("", options=schema_options, index=schema_options.index(default_config['schema']))
+    selected_role = col2.radio(" ", options=available_roles, index=available_roles.index(default_config['role']))
     if selected_schema != default_config['schema'] or selected_role != default_config['role']:
         default_config['schema'] = selected_schema
         default_config['role'] = selected_role
         st.session_state.snowflake_session = Session.builder.configs(default_config).create()
-
+        
+username=getpass.getuser()
+name=username.split('.')[0]
 # Default configuration for Snowflake connection
 default_config = {
-    "user": f"{getpass.getuser()}@myob.com",
+    "user": f"{username}@myob.com",
     "password": '',
     "account": 'bu20658.ap-southeast-2',
     "authenticator": 'externalbrowser',
@@ -93,15 +94,16 @@ if check_session_status(session) != "Active":
 mapping_df = load_mapping()  # Load the mapping data
 
 # Streamlit UI layout
-st.title(":snowflake: Snow Loader")
+st.title(":snowflake: MYOB Loader")
 modify_snowflake_connection_parameters(default_config)  # Display configuration options
 
-uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"], key="file_uploader")
+uploaded_file = st.file_uploader("You can **Drop** your file down below or use the **Browse** button to pick a file", type=["csv"], key="file_uploader")
 
 if uploaded_file:
     file_type = uploaded_file.name.split(".")[-1]
     table_name = format_table_name(uploaded_file.name.split(".")[0])
     df = pd.read_csv(uploaded_file) if file_type == 'csv' else pd.read_excel(uploaded_file)
+    
     st.write("Preview of Data:")
     st.dataframe(df,height=200, use_container_width=True,) 
 
@@ -117,9 +119,10 @@ if uploaded_file:
             session.reconfigure(default_config)  # Apply new configuration
             
     if st.button("Upload to Snowflake", key="upload_button"):
-        with st.spinner("Uploading to Snowflake..."):
+        with st.status("Uploading to Snowflake...",expanded=True) as status:
             stage_name = f"{table_name}_STAGE"
             if check_session_status(session) == "Active":
                 snowflake_upload_with_stage(session, df, stage_name, table_name, file_type)
+                status.update(label="Upload complete!",state="complete", expanded=False)
             else:
                 st.error("Snowflake session is inactive or not initialized.")
