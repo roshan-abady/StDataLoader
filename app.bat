@@ -1,3 +1,2 @@
 @echo off
-for /f "delims=" %%i in ('where streamlit') do set streamlitpath=%%i
-%streamlitpath% run .\snowloader_app.py
+C:\Users\%USERNAME%\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\Scripts\streamlit.exe run .\main\app.py
