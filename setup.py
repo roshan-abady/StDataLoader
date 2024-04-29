@@ -7,7 +7,7 @@ setup(
     install_requires=[line.strip() for line in open("requirements.txt", "r").readlines()],
     entry_points={
         'console_scripts': [
-            'myob_data_loader = main.main:main'
+            'myob_data_loader = main:main'
         ]
     }
 )
