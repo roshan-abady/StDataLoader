@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# streamlit run main/app.py
-main/main.py
+# streamlit run app.py
+main.py
