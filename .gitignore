@@ -1,3 +1,4 @@
 .myobLoader/
 build/
 dist/
+*.code-workspace
