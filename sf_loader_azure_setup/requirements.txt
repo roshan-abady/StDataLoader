@@ -1,0 +1,8 @@
+toml
+tomlkit
+pandas
+streamlit
+# threading
+# geopandas
+# snowflake-connector-python
+hello# openpyxl
