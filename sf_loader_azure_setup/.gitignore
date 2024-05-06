@@ -1,0 +1,4 @@
+snowflake_config.toml
+.snowloader_dev_venv/**/
+.snowloader_dev_venv/pyvenv.cfg
+.snow_venv/pyvenv.cfg
