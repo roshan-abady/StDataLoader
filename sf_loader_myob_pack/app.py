@@ -10,7 +10,7 @@ warnings.filterwarnings('ignore', category=FutureWarning, module='pyarrow.pandas
 
 def load_mapping():
     # Load the mapping CSV from the 'mapping' folder
-    return pd.read_csv('./mapping/mapping.csv')
+    return pd.read_csv('sf_loader_myob_pack/mapping/mapping.csv')
 
 def check_session_status(session):
     try:
