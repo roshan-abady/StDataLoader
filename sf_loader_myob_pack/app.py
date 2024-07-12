@@ -8,9 +8,9 @@ from snowflake.snowpark import Session
 
 warnings.filterwarnings('ignore', category=FutureWarning, module='pyarrow.pandas_compat')
 
-def load_mapping():
-    # Load the mapping CSV from the 'mapping' folder
-    return pd.read_csv('sf_loader_myob_pack/mapping/mapping.csv')
+# def load_mapping():
+#     # Load the mapping CSV from the 'mapping' folder
+#     return pd.read_csv('~/sf_loader_myob_pack/mapping/mapping.csv')
 
 def check_session_status(session):
     try:
@@ -59,7 +59,7 @@ def snowflake_upload_with_stage(session, df, stage_name, table_name, file_type):
 def modify_snowflake_connection_parameters(default_config):
     schema_options = ['TRANSFORMED_PROD', 'RAW']
     available_roles = ['OPERATIONS_ANALYTICS_OWNER_AD', 'OPERATIONS_ANALYTICS_OWNER']
-    st.write(f"Hi {name} \n\n Here you can pick a different **Schema** and **Role**")
+    st.write(f"Hi {name} \n\n Here you can pick the data **Schema** and your **Role**")
     col1, col2 = st.columns(2)
     selected_schema = col1.radio("", options=schema_options, index=schema_options.index(default_config['schema']))
     selected_role = col2.radio(" ", options=available_roles, index=available_roles.index(default_config['role']))
@@ -91,7 +91,7 @@ session = st.session_state.snowflake_session
 if check_session_status(session) != "Active":
     st.error("Failed to initialise or session is inactive.")
 
-mapping_df = load_mapping()  # Load the mapping data
+# mapping_df = load_mapping()  # Load the mapping data
 
 # Streamlit UI layout
 st.title(":snowflake: MYOB Loader")
@@ -108,7 +108,7 @@ if uploaded_file:
     st.dataframe(df,height=200, use_container_width=True,) 
 
     # Check if there is a mapping entry for the uploaded file
-    mapping = mapping_df[mapping_df['TABLE_NAME'].str.upper() == table_name.upper()]
+    # mapping = mapping_df[mapping_df['TABLE_NAME'].str.upper() == table_name.upper()]
     if not mapping.empty:
         # Update config if there are changes
         new_schema = mapping['TABLE_SCHEMA'].values[0]
