@@ -1,6 +1,6 @@
-# MyobLoader
+# StDataLoader
 
-MyobLoader is a Python application that allows you to load CSV files into Snowflake.
+StDataLoader is a Python application that allows you to load CSV files into Snowflake.
 
 ## Installation
 
